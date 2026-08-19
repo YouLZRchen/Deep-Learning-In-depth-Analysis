@@ -1,0 +1,61 @@
+import torch
+from torch import nn
+from torch.nn import functional as F
+
+class Residual_block(nn.Module):
+    def __init__(self,input_channels,output_channels,first=False):
+        super().__init__()
+        self.first=first
+        if first==True:
+            self.conv1=nn.Conv2d(input_channels,output_channels,stride=2,kernel_size=3,padding=1)
+            self.conv3=nn.Conv2d(input_channels,output_channels,kernel_size=1,stride=2)
+        else:
+            self.conv1=nn.Conv2d(output_channels,output_channels,kernel_size=3,padding=1)
+        self.bn1=nn.BatchNorm2d(output_channels)
+        self.conv2=nn.Conv2d(output_channels,output_channels,kernel_size=3,padding=1)
+        self.bn2=nn.BatchNorm2d(output_channels)
+        
+    def forward(self,x):
+        Y=F.relu(self.bn1(self.conv1(x)))
+        Y=self.bn2(self.conv2(Y))
+        if self.first==True:
+            x=self.conv3(x)
+        Y=x+Y
+        return F.relu(Y)
+def resnet_block(input_channels,output_channels,num_residual_block,special=False):
+    blk=[]
+    for i in range(num_residual_block):
+        if i==0 and special==True:
+            blk.append(Residual_block(input_channels,input_channels))
+        if i==0 and special==False:
+            blk.append(Residual_block(input_channels,output_channels,first=True))
+        else:
+            blk.append(Residual_block(output_channels,output_channels))
+    return blk
+
+
+b1=nn.Sequential(
+    nn.Conv2d(kernel_size=7,in_channels=3,out_channels=64,stride=2,padding=3),
+    nn.ReLU(),
+    nn.MaxPool2d(kernel_size=3,stride=2,padding=1),
+)
+R1=Residual_block(64,64)
+x=torch.ones(1,3,224,224)
+for layer in b1:
+    x=layer(x)
+
+b18_2=nn.Sequential(*resnet_block(64,64,2,special=True))
+b18_3=nn.Sequential(*resnet_block(64,128,2))
+b18_4=nn.Sequential(*resnet_block(128,256,2))
+b18_5=nn.Sequential(*resnet_block(256,512,2))
+
+b34_2=nn.Sequential(*resnet_block(64,64,3,special=True))
+b34_3=nn.Sequential(*resnet_block(64,128,4))
+b34_4=nn.Sequential(*resnet_block(128,256,6))
+b34_5=nn.Sequential(*resnet_block(256,512,3))
+
+
+#Resnet-18
+Resnet_18=nn.Sequential(b1,b18_2,b18_3,b18_4,b18_5,nn.AdaptiveAvgPool2d((1,1)),nn.Flatten(),nn.Linear(512,10))
+#Resnet-34
+Resnet_18=nn.Sequential(b1,b34_2,b34_3,b34_4,b34_5,nn.AdaptiveAvgPool2d((1,1)),nn.Flatten(),nn.Linear(512,10))
